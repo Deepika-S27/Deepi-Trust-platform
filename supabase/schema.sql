@@ -6,11 +6,7 @@
 -- Enable necessary extensions
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- ─── Helper: get calling user's role ────────────────────────────────────────
-CREATE OR REPLACE FUNCTION get_my_role()
-RETURNS TEXT LANGUAGE sql STABLE SECURITY DEFINER AS $$
-  SELECT role FROM profiles WHERE id = auth.uid()
-$$;
+
 
 -- ─── 1. PROFILES ─────────────────────────────────────────────────────────────
 -- Extends auth.users with app-specific fields
@@ -28,6 +24,12 @@ CREATE TABLE IF NOT EXISTS profiles (
 );
 
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
+
+-- ─── Helper: get calling user's role ────────────────────────────────────────
+CREATE OR REPLACE FUNCTION get_my_role()
+RETURNS TEXT LANGUAGE sql STABLE SECURITY DEFINER AS $$
+  SELECT role FROM profiles WHERE id = auth.uid()
+$$;
 
 -- Users see their own profile; admin sees all
 CREATE POLICY "profiles_select" ON profiles FOR SELECT TO authenticated
