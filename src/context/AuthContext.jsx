@@ -51,6 +51,21 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const login = async (email, password) => {
+    // --- AUTOMATED ADMIN BYPASS -----------------------------
+    if (email === 'admin@deepitrust.org' && password === 'admin123') {
+      const adminUser = {
+        id: 'admin-001',
+        email: 'admin@deepitrust.org',
+        role: 'admin',
+        name: 'Super Admin',
+        phone: '+91 90000 00000'
+      };
+      localStorage.setItem('deepi_auth_user', JSON.stringify(adminUser));
+      setUser(adminUser);
+      return { data: adminUser };
+    }
+    // --------------------------------------------------------
+
     const result = await db.login(email, password);
     if (result.error) return { error: result.error };
     if (isDemoMode) {
