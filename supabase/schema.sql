@@ -6,6 +6,16 @@
 -- Enable necessary extensions
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
+-- ─── 0. CLEANUP OLD TABLES (For safe re-runs) ───────────────────────────────
+DROP TABLE IF EXISTS profiles CASCADE;
+DROP TABLE IF EXISTS donations CASCADE;
+DROP TABLE IF EXISTS delivery_requests CASCADE;
+DROP TABLE IF EXISTS payments CASCADE;
+DROP TABLE IF EXISTS agent_fees CASCADE;
+DROP TABLE IF EXISTS agent_locations CASCADE;
+DROP TABLE IF EXISTS notifications CASCADE;
+DROP TABLE IF EXISTS admin_settings CASCADE;
+
 
 
 -- ─── 1. PROFILES ─────────────────────────────────────────────────────────────
