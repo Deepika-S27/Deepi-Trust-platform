@@ -24,29 +24,49 @@ export const AuthProvider = ({ children }) => {
       initAuth();
     } else {
       // Supabase mode: listen for auth state changes
-      const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-        if (session?.user) {
-          // Fetch profile
-          const { data: profile } = await supabase
-            .from('profiles').select('*').eq('id', session.user.id).single();
-          if (profile) {
-            setUser(profile);
+      let loadingDone = false;
+      const finishLoading = () => {
+        if (!loadingDone) { loadingDone = true; setLoading(false); }
+      };
+
+      // Safety timeout: always show the app within 5 seconds
+      const safetyTimer = setTimeout(finishLoading, 5000);
+
+      let subscription = null;
+      try {
+        const { data } = supabase.auth.onAuthStateChange(async (event, session) => {
+          if (session?.user) {
+            try {
+              const { data: profile } = await supabase
+                .from('profiles').select('*').eq('id', session.user.id).single();
+              if (profile) setUser(profile);
+            } catch (_) { /* profile fetch failed, continue */ }
+          } else {
+            setUser(null);
           }
-        } else {
-          setUser(null);
-        }
-        setLoading(false);
-      });
-      // Check initial session
-      supabase.auth.getSession().then(async ({ data: { session } }) => {
-        if (session?.user) {
-          const { data: profile } = await supabase
-            .from('profiles').select('*').eq('id', session.user.id).single();
-          if (profile) setUser(profile);
-        }
-        setLoading(false);
-      });
-      return () => subscription.unsubscribe();
+          finishLoading();
+        });
+        subscription = data.subscription;
+
+        // Check initial session
+        supabase.auth.getSession().then(async ({ data: { session } }) => {
+          if (session?.user) {
+            try {
+              const { data: profile } = await supabase
+                .from('profiles').select('*').eq('id', session.user.id).single();
+              if (profile) setUser(profile);
+            } catch (_) { /* ignore */ }
+          }
+          finishLoading();
+        }).catch(() => finishLoading());
+      } catch (_) {
+        finishLoading();
+      }
+
+      return () => {
+        clearTimeout(safetyTimer);
+        subscription?.unsubscribe();
+      };
     }
   }, []);
 
