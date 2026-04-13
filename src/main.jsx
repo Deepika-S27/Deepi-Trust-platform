@@ -31,3 +31,6 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     </ErrorBoundary>
   </React.StrictMode>,
 )
+
+// Remove the inline loading spinner now that React has taken over
+if (window.__removeLoader) window.__removeLoader();
