@@ -338,9 +338,33 @@ export const supabaseDB = {
   async login(email, password) {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) return { error: error.message };
-    const { data: profile, error: pErr } = await supabase
-      .from('profiles').select('*').eq('id', data.user.id).single();
-    if (pErr) return { error: 'Profile not found — please sign up first' };
+    const userId = data.user.id;
+    // Try finding profile by auth user ID first
+    let { data: profile, error: pErr } = await supabase
+      .from('profiles').select('*').eq('id', userId).single();
+    // Fallback: find by email if not found by ID
+    if (pErr || !profile) {
+      const { data: profileByEmail } = await supabase
+        .from('profiles').select('*').eq('email', email).single();
+      if (profileByEmail) {
+        // Update profile ID to match auth user ID for future lookups
+        await supabase.from('profiles').update({ id: userId }).eq('email', email);
+        profile = { ...profileByEmail, id: userId };
+      }
+    }
+    // If still no profile, create one (auto-creation for admin or new users)
+    if (!profile) {
+      const isAdmin = data.user.email === 'admindeepika@deepitrust.org';
+      const newProfile = {
+        id: userId, email: data.user.email,
+        name: isAdmin ? 'Super Admin' : data.user.email.split('@')[0],
+        role: isAdmin ? 'admin' : 'donor',
+        phone: null, address: null
+      };
+      const { data: created } = await supabase
+        .from('profiles').insert(newProfile).select().single();
+      profile = created || newProfile;
+    }
     return { data: profile };
   },
 
