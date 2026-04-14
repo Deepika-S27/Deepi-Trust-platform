@@ -83,13 +83,13 @@ const LoginPage = () => {
             )}
 
             <div className="form-group">
-              <label className="form-label">Email Address</label>
+              <label className="form-label">Email / Username</label>
               <div className="auth-input-wrap">
                 <Mail size={18} className="auth-input-icon" />
                 <input
-                  type="email"
+                  type="text"
                   className="form-control auth-input"
-                  placeholder="you@email.com"
+                  placeholder="Enter email or username"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required

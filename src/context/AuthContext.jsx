@@ -62,9 +62,12 @@ export const AuthProvider = ({ children }) => {
     }
   }, []);
 
-  const login = async (email, password) => {
+  const login = async (emailInput, password) => {
     setUser(null);
     localStorage.removeItem('deepi_auth_user');
+
+    // Normalize: if user types a username without @, append @deepitrust.org
+    const email = emailInput.includes('@') ? emailInput : `${emailInput}@deepitrust.org`;
 
     if (isDemoMode) {
       // ── Demo mode only: admin bypass ──────────────────────────────────
