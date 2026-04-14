@@ -110,7 +110,7 @@ const SignupPage = () => {
               <p className="auth-switch">Already have an account? <Link to="/login">Sign In</Link></p>
             </div>
           ) : (
-            <form onSubmit={handleSubmit} className="auth-form">
+            <form onSubmit={handleSubmit} className="auth-form" autoComplete="off">
               <button type="button" className="auth-back" onClick={() => setStep(1)}>← Change Role</button>
               <h2>Create Account</h2>
               <p className="auth-subtitle">
@@ -129,6 +129,7 @@ const SignupPage = () => {
                   <input type="text" className="form-control auth-input" required
                     placeholder={formData.role === 'center' ? 'e.g. City Orphanage' : 'Enter your full name'}
                     value={formData.name}
+                    autoComplete="off"
                     onChange={e => setFormData({ ...formData, name: e.target.value })} />
                 </div>
               </div>
@@ -141,6 +142,7 @@ const SignupPage = () => {
                   <input type="email" className="form-control auth-input" required
                     placeholder="you@email.com"
                     value={formData.email}
+                    autoComplete="off"
                     onChange={e => setFormData({ ...formData, email: e.target.value })} />
                 </div>
               </div>
@@ -154,6 +156,7 @@ const SignupPage = () => {
                     <input type={showPass ? 'text' : 'password'} className="form-control auth-input" required
                       placeholder="Min 6 characters"
                       value={formData.password}
+                      autoComplete="new-password"
                       onChange={e => setFormData({ ...formData, password: e.target.value })} />
                     <button type="button" className="auth-pass-toggle" onClick={() => setShowPass(!showPass)}>
                       {showPass ? <EyeOff size={18} /> : <Eye size={18} />}

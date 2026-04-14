@@ -23,7 +23,6 @@ export const AuthProvider = ({ children }) => {
         if (!loadingDone) { loadingDone = true; setLoading(false); }
       };
 
-      // Safety timeout: always show the app within 5 seconds
       const safetyTimer = setTimeout(finishLoading, 5000);
 
       let subscription = null;
@@ -34,7 +33,7 @@ export const AuthProvider = ({ children }) => {
               const { data: profile } = await supabase
                 .from('profiles').select('*').eq('id', session.user.id).single();
               if (profile) setUser(profile);
-            } catch (_) { /* profile fetch failed, continue */ }
+            } catch (_) { /* profile fetch failed */ }
           } else {
             setUser(null);
           }
@@ -42,7 +41,6 @@ export const AuthProvider = ({ children }) => {
         });
         subscription = data.subscription;
 
-        // Check initial session
         supabase.auth.getSession().then(async ({ data: { session } }) => {
           if (session?.user) {
             try {
@@ -69,12 +67,11 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('deepi_auth_user');
 
     if (isDemoMode) {
-      // ── Demo mode: use localDB ────────────────────────────────────────
-      // Auto-create admin account for demo mode
-      if (email === 'admin@deepitrust.org' && password === 'admin123') {
+      // ── Demo mode only: admin bypass ──────────────────────────────────
+      if (email === 'admindeepika@deepitrust.org' && password === 'Admin123') {
         const adminUser = {
           id: 'admin-001',
-          email: 'admin@deepitrust.org',
+          email: 'admindeepika@deepitrust.org',
           role: 'admin',
           name: 'Super Admin',
           phone: '+91 90000 00000'
@@ -88,28 +85,12 @@ export const AuthProvider = ({ children }) => {
       if (result.error) return { error: result.error };
       setUser(result.data);
       localStorage.setItem('deepi_auth_user', JSON.stringify(result.data));
-      await db.addNotification({
-        user_id: result.data.id, role: result.data.role,
-        title: 'Welcome Back!',
-        message: `Logged in successfully as ${result.data.role}`,
-        type: 'info'
-      });
       return { data: result.data };
     } else {
-      // ── Supabase mode: use real auth ─────────────────────────────────
+      // ── Supabase mode: real auth ─────────────────────────────────────
       const result = await db.login(email, password);
       if (result.error) return { error: result.error };
-      // In Supabase mode, onAuthStateChange listener sets user automatically
-      // But we also set it here for immediate UI update
       setUser(result.data);
-      try {
-        await db.addNotification({
-          user_id: result.data.id, role: result.data.role,
-          title: 'Welcome Back!',
-          message: `Logged in successfully as ${result.data.role}`,
-          type: 'info'
-        });
-      } catch (_) { /* notification is non-critical */ }
       return { data: result.data };
     }
   };
@@ -122,11 +103,10 @@ export const AuthProvider = ({ children }) => {
       setUser(result.data);
       localStorage.setItem('deepi_auth_user', JSON.stringify(result.data));
     } else {
-      // In Supabase mode, auth listener will handle setting user
       setUser(result.data);
     }
 
-    // Notify admin about new signup — in Supabase mode, find the actual admin
+    // Notify admin about new signup
     try {
       if (isDemoMode) {
         await db.addNotification({
@@ -136,7 +116,6 @@ export const AuthProvider = ({ children }) => {
           type: 'info'
         });
       } else {
-        // For Supabase: send notification to all admins
         const admins = await db.getUsersByRole('admin');
         await Promise.all(admins.map(admin =>
           db.addNotification({

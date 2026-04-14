@@ -1,14 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Heart, Mail, Lock, Eye, EyeOff, LogIn, Shield, Truck, Home, Users } from 'lucide-react';
+import { Heart, Mail, Lock, Eye, EyeOff, LogIn } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-
-const ROLES = [
-  { id: 'donor', label: 'Donor', icon: <Heart size={20} />, desc: 'Donate excess food', color: '#2d6a4f' },
-  { id: 'admin', label: 'Admin', icon: <Shield size={20} />, desc: 'Manage platform', color: '#7c3aed' },
-  { id: 'agent', label: 'Delivery Agent', icon: <Truck size={20} />, desc: 'Deliver food', color: '#2563eb' },
-  { id: 'center', label: 'Beneficiary Center', icon: <Home size={20} />, desc: 'Receive donations', color: '#d97706' },
-];
 
 const LoginPage = () => {
   const { login } = useAuth();
@@ -18,7 +11,6 @@ const LoginPage = () => {
   const [showPass, setShowPass] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [selectedRole, setSelectedRole] = useState(null);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -36,18 +28,6 @@ const LoginPage = () => {
     else if (role === 'agent') navigate('/agent');
     else if (role === 'center') navigate('/center');
     else navigate('/donor');
-  };
-
-  const quickLogin = (role) => {
-    const accounts = {
-      donor: { email: 'donor@example.com', password: 'donor123' },
-      admin: { email: 'admin@deepitrust.org', password: 'admin123' },
-      agent: { email: 'agent@example.com', password: 'agent123' },
-      center: { email: 'center@example.com', password: 'center123' },
-    };
-    setEmail(accounts[role].email);
-    setPassword(accounts[role].password);
-    setSelectedRole(role);
   };
 
   return (
@@ -92,7 +72,7 @@ const LoginPage = () => {
 
         {/* Right Panel - Form */}
         <div className="auth-right">
-          <form onSubmit={handleSubmit} className="auth-form">
+          <form onSubmit={handleSubmit} className="auth-form" autoComplete="off">
             <h2>Sign In</h2>
             <p className="auth-subtitle">Enter your credentials to continue</p>
 
@@ -101,27 +81,6 @@ const LoginPage = () => {
                 <span>⚠️</span> {error}
               </div>
             )}
-
-            {/* Quick Login Roles */}
-            <div className="auth-roles-quick">
-              <label className="auth-label-sm">Quick Demo Login</label>
-              <div className="auth-role-chips">
-                {ROLES.map(r => (
-                  <button
-                    key={r.id}
-                    type="button"
-                    className={`auth-role-chip ${selectedRole === r.id ? 'active' : ''}`}
-                    onClick={() => quickLogin(r.id)}
-                    style={{ '--role-color': r.color }}
-                  >
-                    {r.icon}
-                    <span>{r.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="auth-divider"><span>or enter manually</span></div>
 
             <div className="form-group">
               <label className="form-label">Email Address</label>
@@ -134,6 +93,8 @@ const LoginPage = () => {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
+                  autoComplete="off"
+                  name="login-email-field"
                 />
               </div>
             </div>
@@ -149,6 +110,8 @@ const LoginPage = () => {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
+                  autoComplete="new-password"
+                  name="login-pass-field"
                 />
                 <button type="button" className="auth-pass-toggle" onClick={() => setShowPass(!showPass)}>
                   {showPass ? <EyeOff size={18} /> : <Eye size={18} />}
