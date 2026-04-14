@@ -27,11 +27,35 @@ export const AuthProvider = ({ children }) => {
 
       let subscription = null;
       try {
-        const { data } = supabase.auth.onAuthStateChange(async (event, session) => {
+      // Helper to find/create profile resiliently
+      const resolveProfile = async (sessionUser) => {
+        // 1. Try by auth user ID
+        let { data: profile } = await supabase
+          .from('profiles').select('*').eq('id', sessionUser.id).single();
+        if (profile) return profile;
+        // 2. Try by email
+        const { data: byEmail } = await supabase
+          .from('profiles').select('*').eq('email', sessionUser.email).single();
+        if (byEmail) {
+          await supabase.from('profiles').update({ id: sessionUser.id }).eq('email', sessionUser.email);
+          return { ...byEmail, id: sessionUser.id };
+        }
+        // 3. Auto-create
+        const isAdmin = sessionUser.email === 'admindeepika@deepitrust.org';
+        const newProfile = {
+          id: sessionUser.id, email: sessionUser.email,
+          name: isAdmin ? 'Super Admin' : sessionUser.email.split('@')[0],
+          role: isAdmin ? 'admin' : 'donor', phone: null, address: null
+        };
+        const { data: created } = await supabase
+          .from('profiles').insert(newProfile).select().single();
+        return created || newProfile;
+      };
+
+      const { data } = supabase.auth.onAuthStateChange(async (event, session) => {
           if (session?.user) {
             try {
-              const { data: profile } = await supabase
-                .from('profiles').select('*').eq('id', session.user.id).single();
+              const profile = await resolveProfile(session.user);
               if (profile) setUser(profile);
             } catch (_) { /* profile fetch failed */ }
           } else {
@@ -44,8 +68,7 @@ export const AuthProvider = ({ children }) => {
         supabase.auth.getSession().then(async ({ data: { session } }) => {
           if (session?.user) {
             try {
-              const { data: profile } = await supabase
-                .from('profiles').select('*').eq('id', session.user.id).single();
+              const profile = await resolveProfile(session.user);
               if (profile) setUser(profile);
             } catch (_) { /* ignore */ }
           }
