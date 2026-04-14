@@ -7,14 +7,9 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { useAppContext } from '../context/AppContext';
 import LiveMap from '../components/LiveMap';
+import { analyzeFoodImage } from '../utils/foodAI';
 
-const AI_LABELS = [
-  { label: 'Freshness', icon: '🥬' },
-  { label: 'Packaging', icon: '📦' },
-  { label: 'Hygiene', icon: '🧼' },
-  { label: 'Temperature', icon: '🌡️' },
-  { label: 'Contamination Risk', icon: '⚠️' },
-];
+// AI analysis is handled by ../utils/foodAI.js (real image analysis)
 
 const AdminDashboard = () => {
   const { user } = useAuth();
@@ -37,6 +32,7 @@ const AdminDashboard = () => {
   const [centers, setCenters]             = useState([]);
   const [agents, setAgents]               = useState([]);
   const [proofModal, setProofModal]       = useState(null); // { id, proof, donor_name, amount, status }
+  const [aiError, setAiError]             = useState(null); // non-food detection alert
   const qrInputRef = useRef();
 
   // Load centers + agents (async-compatible)
@@ -68,23 +64,45 @@ const AdminDashboard = () => {
     setPhotosReviewed(false);
   };
 
-  // ── AI Scan ────────────────────────────────────────────────────────────────
-  const initiateAICheck = (id) => {
+  // ── Real AI Scan (Canvas-based computer vision) ────────────────────────────
+  const initiateAICheck = async (id) => {
     setScanningId(id);
-    setTimeout(() => {
-      const score = Math.floor(Math.random() * (99 - 82 + 1) + 82);
-      const aiDetails = AI_LABELS.map(item => ({
-        ...item,
-        score: Math.floor(Math.random() * (99 - 78 + 1) + 78),
-        status: Math.random() > 0.12 ? 'pass' : 'warning'
-      }));
-      if (score < 60) {
-        rejectDonation(id, 'AI detected low quality food — rejected automatically');
+    setAiError(null);
+    try {
+      const donation = donations.find(d => d.id === id);
+      const imageUrl = donation?.photos?.[0] || donation?.image_url;
+      if (!imageUrl) {
+        setAiError({ id, message: '⚠️ No image was uploaded with this donation. Cannot run AI quality check.' });
+        setScanningId(null);
+        return;
+      }
+
+      // Run real AI image analysis
+      const result = await analyzeFoodImage(imageUrl);
+
+      if (!result.isFood) {
+        // NON-FOOD DETECTED — alert admin and auto-reject
+        setAiError({
+          id,
+          message: `🚫 AI ALERT: This image does NOT appear to be food!\n\nReason: ${result.reason}\nConfidence: ${result.confidence}%\n\nThis donation should be rejected.`
+        });
+        rejectDonation(id, `AI rejected: ${result.reason} (Confidence: ${result.confidence}%)`);
+        setScanningId(null);
+        return;
+      }
+
+      // FOOD DETECTED — score quality
+      if (result.overallScore < 60) {
+        rejectDonation(id, `AI detected low quality food — Score: ${result.overallScore}%`);
       } else {
-        approveDonation(id, score, aiDetails);
+        approveDonation(id, result.overallScore, result.details);
       }
       setScanningId(null);
-    }, 3000);
+    } catch (err) {
+      console.error('AI Check error:', err);
+      setAiError({ id, message: 'AI analysis failed: ' + err.message });
+      setScanningId(null);
+    }
   };
 
   // ── Dispatch to All Agents ─────────────────────────────────────────────────
@@ -484,13 +502,27 @@ const AdminDashboard = () => {
                         </div>
                       )}
                       <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem' }}>
-                        <button className="btn btn-accent btn-block btn-sm" onClick={() => initiateAICheck(order.id)}>
-                          <Cpu size={16} /> Run AI Scan
+                        <button className="btn btn-accent btn-block btn-sm" onClick={() => initiateAICheck(order.id)}
+                          disabled={scanningId === order.id}>
+                          {scanningId === order.id ? (
+                            <><div className="auth-spinner" style={{ width: 14, height: 14 }} /> Analyzing Image...</>
+                          ) : (
+                            <><Cpu size={16} /> Run AI Scan</>
+                          )}
                         </button>
                         <button className="btn btn-danger btn-sm" onClick={() => rejectDonation(order.id, 'Manually rejected by admin')}>
                           <XCircle size={16} />
                         </button>
                       </div>
+                      {aiError && aiError.id === order.id && (
+                        <div style={{ marginTop: '0.75rem', padding: '0.75rem 1rem', background: 'rgba(220,38,38,0.08)', border: '1.5px solid rgba(220,38,38,0.3)', borderRadius: 'var(--radius-md)', fontSize: '0.85rem', color: 'var(--danger)', whiteSpace: 'pre-line' }}>
+                          {aiError.message}
+                          <button onClick={() => setAiError(null)}
+                            style={{ display: 'block', marginTop: '0.5rem', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.8rem', textDecoration: 'underline' }}>
+                            Dismiss
+                          </button>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
