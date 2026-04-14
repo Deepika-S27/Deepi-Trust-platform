@@ -1,8 +1,26 @@
 import React, { createContext, useState, useContext, useCallback, useEffect } from 'react';
-import { db, calculateDeliveryFee, getDistance } from '../config/supabase';
+import { db, isDemoMode, calculateDeliveryFee, getDistance } from '../config/supabase';
 import { useAuth } from './AuthContext';
 
 const AppContext = createContext();
+
+// Helper: send notification to all admin users (works for both modes)
+async function notifyAdmins(title, message, type = 'info') {
+  try {
+    if (isDemoMode) {
+      await db.addNotification({
+        user_id: 'admin-001', role: 'admin', title, message, type
+      });
+    } else {
+      const admins = await db.getUsersByRole('admin');
+      await Promise.all(admins.map(admin =>
+        db.addNotification({
+          user_id: admin.id, role: 'admin', title, message, type
+        })
+      ));
+    }
+  } catch (_) { /* notification is non-critical */ }
+}
 
 export const AppProvider = ({ children }) => {
   const { user } = useAuth();
@@ -49,12 +67,11 @@ export const AppProvider = ({ children }) => {
   // ── Donation Actions ───────────────────────────────────────────────────────
   const addDonation = useCallback(async (donation) => {
     const newDon = await Promise.resolve(db.addDonation(donation));
-    await Promise.resolve(db.addNotification({
-      user_id: 'admin-001', role: 'admin',
-      title: 'New Donation Received',
-      message: `${donation.donor_name} donated ${donation.food_name}`,
-      type: 'donation'
-    }));
+    await notifyAdmins(
+      'New Donation Received',
+      `${donation.donor_name} donated ${donation.food_name}`,
+      'donation'
+    );
     refreshData();
     return newDon;
   }, [refreshData]);
@@ -70,12 +87,14 @@ export const AppProvider = ({ children }) => {
     const all = await Promise.resolve(db.getDonations());
     const don = all.find(d => d.id === id);
     if (don) {
-      await Promise.resolve(db.addNotification({
-        user_id: don.donor_id, role: 'donor',
-        title: 'Donation Approved!',
-        message: `Your donation "${don.food_name}" passed AI quality check (Score: ${aiScore}%)`,
-        type: 'success'
-      }));
+      try {
+        await Promise.resolve(db.addNotification({
+          user_id: don.donor_id, role: 'donor',
+          title: 'Donation Approved!',
+          message: `Your donation "${don.food_name}" passed AI quality check (Score: ${aiScore}%)`,
+          type: 'success'
+        }));
+      } catch (_) {}
     }
     refreshData();
   }, [refreshData]);
@@ -85,12 +104,14 @@ export const AppProvider = ({ children }) => {
     const all = await Promise.resolve(db.getDonations());
     const don = all.find(d => d.id === id);
     if (don) {
-      await Promise.resolve(db.addNotification({
-        user_id: don.donor_id, role: 'donor',
-        title: 'Donation Rejected',
-        message: `Your donation "${don.food_name}" was rejected: ${reason}`,
-        type: 'error'
-      }));
+      try {
+        await Promise.resolve(db.addNotification({
+          user_id: don.donor_id, role: 'donor',
+          title: 'Donation Rejected',
+          message: `Your donation "${don.food_name}" was rejected: ${reason}`,
+          type: 'error'
+        }));
+      } catch (_) {}
     }
     refreshData();
   }, [refreshData]);
@@ -134,15 +155,17 @@ export const AppProvider = ({ children }) => {
     }));
 
     // Notify all registered agents
-    const agents = await Promise.resolve(db.getUsersByRole('agent'));
-    await Promise.all(agents.map(agent =>
-      Promise.resolve(db.addNotification({
-        user_id: agent.id, role: 'agent',
-        title: '🚴 New Delivery Available!',
-        message: `${don.food_name} — Pickup: ${don.pickup_location || 'See details'} → ${centerName}. Fee calculated on acceptance.`,
-        type: 'task'
-      }))
-    ));
+    try {
+      const agents = await Promise.resolve(db.getUsersByRole('agent'));
+      await Promise.all(agents.map(agent =>
+        Promise.resolve(db.addNotification({
+          user_id: agent.id, role: 'agent',
+          title: '🚴 New Delivery Available!',
+          message: `${don.food_name} — Pickup: ${don.pickup_location || 'See details'} → ${centerName}. Fee calculated on acceptance.`,
+          type: 'task'
+        }))
+      ));
+    } catch (_) {}
 
     refreshData();
     return { dispatched: true };
@@ -186,20 +209,22 @@ export const AppProvider = ({ children }) => {
     const result = await Promise.resolve(db.acceptDeliveryRequest(donationId, agentId, agentName));
     if (result.error) return result;
 
-    if (don) {
-      await Promise.resolve(db.addNotification({
-        user_id: don.center_id, role: 'center',
-        title: '🚴 Agent Assigned!',
-        message: `${agentName} accepted the delivery (${distanceKm} km). Track live!`,
-        type: 'info'
-      }));
-      await Promise.resolve(db.addNotification({
-        user_id: don.donor_id, role: 'donor',
-        title: 'Agent Accepted Your Donation!',
-        message: `${agentName} is heading to pickup "${don.food_name}" (${distanceKm} km · ₹${feeAmount})`,
-        type: 'success'
-      }));
-    }
+    try {
+      if (don) {
+        await Promise.resolve(db.addNotification({
+          user_id: don.center_id, role: 'center',
+          title: '🚴 Agent Assigned!',
+          message: `${agentName} accepted the delivery (${distanceKm} km). Track live!`,
+          type: 'info'
+        }));
+        await Promise.resolve(db.addNotification({
+          user_id: don.donor_id, role: 'donor',
+          title: 'Agent Accepted Your Donation!',
+          message: `${agentName} is heading to pickup "${don.food_name}" (${distanceKm} km · ₹${feeAmount})`,
+          type: 'success'
+        }));
+      }
+    } catch (_) {}
 
     refreshData();
     return { data: result.data, distanceKm, feeAmount };
@@ -216,12 +241,14 @@ export const AppProvider = ({ children }) => {
     const all = await Promise.resolve(db.getDonations());
     const don = all.find(d => d.id === id);
     if (don) {
-      await Promise.resolve(db.addNotification({
-        user_id: don.center_id, role: 'center',
-        title: '📦 Food Picked Up!',
-        message: `Agent is now en route with "${don.food_name}". Track live!`,
-        type: 'info'
-      }));
+      try {
+        await Promise.resolve(db.addNotification({
+          user_id: don.center_id, role: 'center',
+          title: '📦 Food Picked Up!',
+          message: `Agent is now en route with "${don.food_name}". Track live!`,
+          type: 'info'
+        }));
+      } catch (_) {}
     }
     refreshData();
   }, [refreshData]);
@@ -236,28 +263,30 @@ export const AppProvider = ({ children }) => {
       drop_photos: dropPhotos || []
     }));
     if (don) {
-      // Create agent fee record — status='pending' until admin reviews photos
-      await Promise.resolve(db.addAgentFee({
-        agent_id: don.agent_id,
-        agent_name: don.agent_name,
-        donation_id: don.id,
-        food_name: don.food_name,
-        distance_km: don.delivery_distance,
-        fee: don.delivery_fee
-      }));
-      await Promise.resolve(db.clearAgentLocation(don.agent_id));
-      await Promise.resolve(db.addNotification({
-        user_id: don.donor_id, role: 'donor',
-        title: '✅ Donation Delivered!',
-        message: `Your "${don.food_name}" has reached ${don.center_name}`,
-        type: 'success'
-      }));
-      await Promise.resolve(db.addNotification({
-        user_id: don.center_id, role: 'center',
-        title: '🍱 Delivery Arrived!',
-        message: `"${don.food_name}" delivered by ${don.agent_name}. Please confirm receipt.`,
-        type: 'success'
-      }));
+      try {
+        // Create agent fee record — status='pending' until admin reviews photos
+        await Promise.resolve(db.addAgentFee({
+          agent_id: don.agent_id,
+          agent_name: don.agent_name,
+          donation_id: don.id,
+          food_name: don.food_name,
+          distance_km: don.delivery_distance,
+          fee: don.delivery_fee
+        }));
+        await Promise.resolve(db.clearAgentLocation(don.agent_id));
+        await Promise.resolve(db.addNotification({
+          user_id: don.donor_id, role: 'donor',
+          title: '✅ Donation Delivered!',
+          message: `Your "${don.food_name}" has reached ${don.center_name}`,
+          type: 'success'
+        }));
+        await Promise.resolve(db.addNotification({
+          user_id: don.center_id, role: 'center',
+          title: '🍱 Delivery Arrived!',
+          message: `"${don.food_name}" delivered by ${don.agent_name}. Please confirm receipt.`,
+          type: 'success'
+        }));
+      } catch (_) {}
     }
     refreshData();
   }, [refreshData]);
@@ -294,12 +323,11 @@ export const AppProvider = ({ children }) => {
   // ── Payment Actions ────────────────────────────────────────────────────────
   const addPayment = useCallback(async (payment) => {
     const p = await Promise.resolve(db.addPayment(payment));
-    await Promise.resolve(db.addNotification({
-      user_id: 'admin-001', role: 'admin',
-      title: 'New Payment Received',
-      message: `₹${payment.amount} from ${payment.donor_name}`,
-      type: 'payment'
-    }));
+    await notifyAdmins(
+      'New Payment Received',
+      `₹${payment.amount} from ${payment.donor_name}`,
+      'payment'
+    );
     refreshData();
     return p;
   }, [refreshData]);
